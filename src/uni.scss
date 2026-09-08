@@ -1,0 +1,27 @@
+@import "uview-plus/theme.scss";
+
+$uni-color-primary: #c96a3d;
+$uni-color-success: #5f8f6b;
+$uni-color-warning: #c9902f;
+$uni-color-error: #ba4d38;
+
+$uni-text-color: #221d18;
+$uni-text-color-inverse: #fffaf5;
+$uni-text-color-grey: #7d6e61;
+$uni-text-color-placeholder: #9d8d7e;
+$uni-text-color-disable: #c7b6a8;
+
+$uni-bg-color: #fffaf3;
+$uni-bg-color-grey: #f5ecdf;
+$uni-bg-color-hover: #f0e5d5;
+$uni-bg-color-mask: rgba(22, 17, 12, 0.45);
+
+$uni-border-color: #e2d0bf;
+
+$uni-font-size-sm: 24rpx;
+$uni-font-size-base: 28rpx;
+$uni-font-size-lg: 32rpx;
+
+$uni-border-radius-sm: 8rpx;
+$uni-border-radius-base: 16rpx;
+$uni-border-radius-lg: 28rpx;
