@@ -43,7 +43,7 @@
 
 <script setup>
 import { computed, nextTick, ref } from 'vue'
-import { onLoad } from '@dcloudio/uni-app'
+import { onLoad, onReachBottom } from '@dcloudio/uni-app'
 import AppShell from '@/components/common/AppShell.vue'
 import StateBlock from '@/components/common/StateBlock.vue'
 import ChoresPanel from '@/components/dashboard/ChoresPanel.vue'
@@ -140,5 +140,11 @@ onLoad(async (query) => {
   ready.value = true
   pageLoading.value = false
   await activateCurrentTab()
+})
+
+onReachBottom(() => {
+  if (activeTab.value === 'comparison') {
+    comparisonPanelRef.value?.loadMore?.()
+  }
 })
 </script>

@@ -13,7 +13,7 @@
         </view>
       </view>
 
-      <view v-if="rangeKey === 'custom'" class="custom-range">
+      <view v-if="rangeKey === 'all'" class="custom-range">
         <picker mode="date" :value="customStart" @change="handleCustomStart">
           <view class="date-box">{{ customStart }}</view>
         </picker>
@@ -57,7 +57,7 @@
 
       <view class="timeline-card">
         <text class="section-title">时间流水</text>
-        <view v-for="group in comparison.timelineGroups" :key="group.date" class="timeline-group">
+        <view v-for="group in visibleTimelineGroups" :key="group.date" class="timeline-group">
           <text class="timeline-date">{{ group.date }}</text>
           <view class="timeline-list">
             <view
@@ -90,6 +90,10 @@
               </view>
             </view>
           </view>
+        </view>
+        <view v-if="allTimelineRecords.length" class="timeline-load-state">
+          <text v-if="hasMoreRecords">滚动到底部加载更多</text>
+          <text v-else>已加载全部记录</text>
         </view>
       </view>
 
@@ -138,6 +142,8 @@
         </up-button>
       </view>
     </view>
+
+    <BackToTopButton />
   </view>
 </template>
 
@@ -145,6 +151,7 @@
 import dayjs from 'dayjs'
 import { computed, reactive, ref } from 'vue'
 import StateBlock from '@/components/common/StateBlock.vue'
+import BackToTopButton from '@/components/common/BackToTopButton.vue'
 import { useSession } from '@/composables/useSession'
 import { RANGE_OPTIONS } from '@/constants/housework'
 import {
@@ -180,20 +187,43 @@ const comparison = reactive({
   timelineGroups: [],
 })
 const justSwiped = ref(false)
+const visibleRecordCount = ref(20)
+const loadingMore = ref(false)
 
 const currentUserId = computed(() => sessionState.profile?.id || '')
+const allTimelineRecords = computed(() =>
+  comparison.timelineGroups.flatMap((group) => group.records)
+)
+const visibleTimelineGroups = computed(() => {
+  const visibleRecords = allTimelineRecords.value.slice(0, visibleRecordCount.value)
+  const groups = []
+  const dateMap = new Map()
+
+  visibleRecords.forEach((record) => {
+    if (!dateMap.has(record.completed_on)) {
+      const group = { date: record.completed_on, records: [] }
+      dateMap.set(record.completed_on, group)
+      groups.push(group)
+    }
+    dateMap.get(record.completed_on).records.push(record)
+  })
+
+  return groups
+})
+const hasMoreRecords = computed(() => visibleRecordCount.value < allTimelineRecords.value.length)
 
 function fillComparison(nextValue) {
   comparison.memberCards = nextValue.memberCards
   comparison.categoryMatrix = nextValue.categoryMatrix
   comparison.timelineGroups = nextValue.timelineGroups
+  visibleRecordCount.value = 20
 }
 
 async function loadData() {
   if (!sessionState.profile?.family_id) return
   closeSwipe()
 
-  if (rangeKey.value === 'custom' && customStart.value > customEnd.value) {
+  if (rangeKey.value === 'all' && customStart.value > customEnd.value) {
     showError('开始日期不能晚于结束日期')
     return
   }
@@ -221,9 +251,7 @@ async function loadData() {
 function switchRange(nextKey) {
   rangeKey.value = nextKey
   closeSwipe()
-  if (nextKey !== 'custom') {
-    loadData()
-  }
+  loadData()
 }
 
 function handleCustomStart(event) {
@@ -380,8 +408,18 @@ function handleTimelineTap() {
   closeSwipe()
 }
 
+async function loadMore() {
+  if (loadingMore.value || !hasMoreRecords.value) return
+
+  loadingMore.value = true
+  await Promise.resolve()
+  visibleRecordCount.value += 20
+  loadingMore.value = false
+}
+
 defineExpose({
   activate: loadData,
+  loadMore,
 })
 </script>
 
@@ -522,6 +560,13 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: 12rpx;
+}
+
+.timeline-load-state {
+  padding: 12rpx 0 4rpx;
+  color: #8a7567;
+  font-size: 22rpx;
+  text-align: center;
 }
 
 .timeline-swipe {

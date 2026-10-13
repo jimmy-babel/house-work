@@ -36,7 +36,6 @@ export const RANGE_OPTIONS = [
   { key: 'week', label: '本周' },
   // { key: 'month', label: '本月' },
   { key: 'all', label: '全部' },
-  { key: 'custom', label: '自定义' },
 ]
 
 export const APP_NAV_ITEMS = [

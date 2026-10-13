@@ -45,8 +45,8 @@ export function resolveDateRange(rangeKey, customStart, customEnd) {
 
   if (rangeKey === 'all') {
     return {
-      startDate: null,
-      endDate: null,
+      startDate: customStart || null,
+      endDate: customEnd || null,
     }
   }
 

@@ -128,6 +128,8 @@
         <up-button type="primary" shape="circle" @click="confirmCustomTask">确认添加</up-button>
       </view>
     </view>
+
+    <BackToTopButton class="back-to-top--chores" />
   </view>
 </template>
 
@@ -135,6 +137,7 @@
 import dayjs from 'dayjs'
 import { computed, ref } from 'vue'
 import StateBlock from '@/components/common/StateBlock.vue'
+import BackToTopButton from '@/components/common/BackToTopButton.vue'
 import { useSession } from '@/composables/useSession'
 import {
   CATEGORY_COLORS,
@@ -390,6 +393,10 @@ defineExpose({
 <style lang="scss" scoped>
 .panel {
   padding-bottom: 320rpx;
+}
+
+.back-to-top--chores {
+  bottom: 350rpx;
 }
 
 .desktop-scroll {
