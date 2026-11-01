@@ -3,6 +3,7 @@
     label="Family Helper"
     title="我的家庭"
     badge="家庭信息"
+    nav-title="我的家庭"
     :show-nav="false"
   >
     <StateBlock

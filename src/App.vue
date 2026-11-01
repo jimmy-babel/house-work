@@ -8,7 +8,7 @@ export default {
 
 <style lang="scss">
 @import "uview-plus/index.scss";
-
+@import "static/common.scss";
 page {
   min-height: 100%;
   background:
@@ -27,5 +27,13 @@ input,
 textarea,
 picker {
   box-sizing: border-box;
+}
+
+button,
+picker,
+uni-picker,
+.uni-picker,
+.u-button {
+  cursor: pointer;
 }
 </style>

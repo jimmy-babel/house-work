@@ -137,7 +137,11 @@ export async function fetchFamilyMembers(familyId) {
   return data || []
 }
 
-export async function fetchCompletionRecords({ familyId, startDate, endDate }) {
+export async function fetchCompletionRecords({
+  familyId,
+  startDate,
+  endDate,
+}) {
   const client = getSupabaseClient()
   let query = client
     .from('chore_completion_records')
@@ -146,6 +150,7 @@ export async function fetchCompletionRecords({ familyId, startDate, endDate }) {
     )
     .eq('family_id', familyId)
     .order('completed_at', { ascending: false })
+    .order('id', { ascending: false })
 
   if (startDate) {
     query = query.gte('completed_on', startDate)
@@ -162,6 +167,21 @@ export async function fetchCompletionRecords({ familyId, startDate, endDate }) {
   }
 
   return data || []
+}
+
+export async function fetchCompletionRecordStats({ familyId, startDate, endDate }) {
+  const client = getSupabaseClient()
+  const { data, error } = await client.rpc('get_completion_record_stats', {
+    p_family_id: familyId,
+    p_start_date: startDate || null,
+    p_end_date: endDate || null,
+  })
+
+  if (error) {
+    throw error
+  }
+
+  return data || { members: [], daily_checkins: [] }
 }
 
 export async function updateCompletionRecordDate({
@@ -217,25 +237,22 @@ export async function deleteCompletionRecord({ recordId, familyId, userId }) {
   }
 }
 
-export function buildComparisonData(members, records) {
+export function buildComparisonData(members, records, stats = {}) {
   const memberMap = new Map(members.map((member) => [member.id, member]))
+  const statsByMember = new Map((stats.members || []).map((item) => [item.user_id, item]))
 
   const memberCards = members
     .map((member) => {
-      const memberRecords = records.filter((record) => record.user_id === member.id)
-      const categoryCountMap = memberRecords.reduce((accumulator, record) => {
-        accumulator[record.category_name_snapshot] =
-          (accumulator[record.category_name_snapshot] || 0) + 1
-        return accumulator
-      }, {})
+      const memberStats = statsByMember.get(member.id)
+      const categoryCountMap = memberStats?.category_counts || {}
 
       return {
         ...member,
-        totalCount: memberRecords.length,
-        latestCompletedAt: memberRecords[0]?.completed_at || null,
+        totalCount: Number(memberStats?.total_count || 0),
+        latestCompletedAt: memberStats?.latest_completed_at || null,
         categories: CATEGORY_ORDER.map((category) => ({
           name: category,
-          count: categoryCountMap[category] || 0,
+          count: Number(categoryCountMap[category] || 0),
         })).filter((item) => item.count > 0),
       }
     })
@@ -244,10 +261,7 @@ export function buildComparisonData(members, records) {
   const categoryMatrix = CATEGORY_ORDER.map((category) => {
     const row = { category }
     memberCards.forEach((member) => {
-      row[member.id] = records.filter(
-        (record) =>
-          record.user_id === member.id && record.category_name_snapshot === category
-      ).length
+      row[member.id] = member.categories.find((item) => item.name === category)?.count || 0
     })
     row.total = memberCards.reduce((sum, member) => sum + row[member.id], 0)
     return row
@@ -261,7 +275,9 @@ export function buildComparisonData(members, records) {
       ...record,
       memberName: memberMap.get(record.user_id)?.display_name || '未命名成员',
     }))
-    .sort((left, right) => sortDateDesc(left.completed_at, right.completed_at))
+    .sort((left, right) =>
+      sortDateDesc(left.completed_at, right.completed_at) || right.id.localeCompare(left.id)
+    )
     .forEach((record) => {
       if (!dateMap.has(record.completed_on)) {
         const group = {

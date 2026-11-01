@@ -1,8 +1,11 @@
 <template>
   <AppShell
     label="Items Helper"
+    nav-title="物品助手"
     title="家庭物品"
-    badge="物品信息"
+    badge="物品助手"
+    :badge-options="QUICK_ENTRY_ITEMS"
+    current-quick-entry-key="items"
     :show-nav="false"
   >
     <StateBlock
@@ -38,6 +41,7 @@ import AppShell from '@/components/common/AppShell.vue'
 import StateBlock from '@/components/common/StateBlock.vue'
 import ItemsPanel from '@/components/items/ItemsPanel.vue'
 import { ensureAuthenticatedPage, useSession } from '@/composables/useSession'
+import { QUICK_ENTRY_ITEMS } from '@/constants/housework'
 
 const { state: sessionState } = useSession()
 

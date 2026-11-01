@@ -1,10 +1,13 @@
 <template>
   <AppShell
-    :current-key="activeTab"
+    nav-title="家务助手"
     label="Housework Helper"
+    :current-key="activeTab"
     :title="shellContent.title"
     :subtitle="shellContent.subtitle"
     :badge="shellContent.badge"
+    :badge-options="QUICK_ENTRY_ITEMS"
+    current-quick-entry-key="chores"
     nav-mode="emit"
     @nav-change="handleTabChange"
   >
@@ -32,10 +35,17 @@
 
     <template v-else-if="ready">
       <view v-show="activeTab === 'chores'">
-        <ChoresPanel ref="choresPanelRef" @confirmed="showComparisonRecords" />
+        <ChoresPanel
+          ref="choresPanelRef"
+          :back-to-top-visible="backToTopVisible"
+          @confirmed="showComparisonRecords"
+        />
       </view>
       <view v-show="activeTab === 'comparison'">
-        <ComparisonPanel ref="comparisonPanelRef" />
+        <ComparisonPanel
+          ref="comparisonPanelRef"
+          :back-to-top-visible="backToTopVisible"
+        />
       </view>
     </template>
   </AppShell>
@@ -43,32 +53,33 @@
 
 <script setup>
 import { computed, nextTick, ref } from 'vue'
-import { onLoad, onReachBottom } from '@dcloudio/uni-app'
+import { onLoad, onPageScroll, onReachBottom } from '@dcloudio/uni-app'
 import AppShell from '@/components/common/AppShell.vue'
 import StateBlock from '@/components/common/StateBlock.vue'
 import ChoresPanel from '@/components/dashboard/ChoresPanel.vue'
 import ComparisonPanel from '@/components/dashboard/ComparisonPanel.vue'
 import { ensureAuthenticatedPage, useSession } from '@/composables/useSession'
+import { QUICK_ENTRY_ITEMS } from '@/constants/housework'
 
 const { state: sessionState } = useSession()
 
 const activeTab = ref('chores')
 const ready = ref(false)
 const pageLoading = ref(true)
+const backToTopVisible = ref(false)
+let previousScrollTop = 0
 
 const choresPanelRef = ref(null)
 const comparisonPanelRef = ref(null)
 
 const shellContentMap = {
   chores: {
-    title: '今天做了哪些家务？',
-    // subtitle: '从家务清单里点选已完成项目，确认后统一写入数据库。',
-    badge: '记录家务',
+    title: '一起完成家务吧~',
+    badge: '家务助手',
   },
   comparison: {
-    title: '完成记录',
-    // subtitle: '按时间范围对比家庭成员完成次数，并查看逐条完成流水。',
-    badge: '完成记录',
+    title: '一起完成家务吧~',
+    badge: '家务助手',
   },
 }
 
@@ -146,5 +157,17 @@ onReachBottom(() => {
   if (activeTab.value === 'comparison') {
     comparisonPanelRef.value?.loadMore?.()
   }
+})
+
+onPageScroll(({ scrollTop = 0 } = {}) => {
+  if (scrollTop <= 0) {
+    backToTopVisible.value = false
+  } else if (scrollTop > previousScrollTop) {
+    backToTopVisible.value = true
+  } else if (scrollTop < previousScrollTop) {
+    backToTopVisible.value = false
+  }
+
+  previousScrollTop = scrollTop
 })
 </script>

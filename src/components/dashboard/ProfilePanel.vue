@@ -166,6 +166,7 @@ defineExpose({
   background: #2e241d;
   color: #fff8f3;
   font-size: 24rpx;
+  cursor: pointer;
 }
 
 .member-list {

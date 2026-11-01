@@ -129,7 +129,10 @@
       </view>
     </view>
 
-    <BackToTopButton class="back-to-top--chores" />
+    <!-- <BackToTopButton
+      class="back-to-top--chores"
+      :visible="backToTopVisible"
+    /> -->
   </view>
 </template>
 
@@ -157,6 +160,12 @@ import { getNowIsoForDate, getToday, getYesterday } from '@/utils/date'
 import { showError, showSuccess } from '@/utils/feedback'
 
 const emit = defineEmits(['confirmed'])
+defineProps({
+  backToTopVisible: {
+    type: Boolean,
+    default: false,
+  },
+})
 const { state: sessionState } = useSession()
 
 const loading = ref(false)
@@ -407,6 +416,7 @@ defineExpose({
   display: flex;
   gap: 18rpx;
   min-width: 1600rpx;
+  padding-bottom: 30rpx;
 }
 
 .mobile-board {
@@ -464,6 +474,7 @@ defineExpose({
   border-radius: 22rpx;
   background: #f9f1e7;
   border: 2rpx solid rgba(169, 137, 112, 0.14);
+  cursor: pointer;
 }
 
 .chore-item--overdue {
@@ -536,6 +547,7 @@ defineExpose({
   height: 45rpx;
   border-radius: 999rpx;
   background: rgba(255, 248, 241, 0.18);
+  cursor: pointer;
 }
 
 .tray-add-button__label {
@@ -550,6 +562,7 @@ defineExpose({
   background: rgba(255, 248, 241, 0.14);
   color: #fff6ef;
   font-size: 24rpx;
+  cursor: pointer;
 }
 
 .date-quick-button {
@@ -563,6 +576,7 @@ defineExpose({
   color: #f3e9df;
   font-size: 24rpx;
   border: 4rpx solid transparent;
+  cursor: pointer;
 }
 
 .date-quick-button--active {
@@ -575,6 +589,8 @@ defineExpose({
   display: flex;
   flex-wrap: wrap;
   gap: 12rpx;
+  max-height: 20vh;
+  overflow-y: auto;
 }
 
 .pending-tag {
@@ -600,6 +616,7 @@ defineExpose({
   font-size: 28rpx;
   line-height: 1;
   color: #ffd5c4;
+  cursor: pointer;
 }
 
 .custom-modal-mask {
@@ -611,6 +628,7 @@ defineExpose({
   justify-content: center;
   padding: 32rpx;
   background: rgba(0, 0, 0, 0.58);
+  cursor: pointer;
 }
 
 .custom-modal {
@@ -623,6 +641,7 @@ defineExpose({
   border-radius: 28rpx;
   background: #fffaf4;
   box-shadow: 0 30rpx 70rpx rgba(0, 0, 0, 0.18);
+  cursor: auto;
 }
 
 .custom-modal__title {
@@ -642,4 +661,5 @@ defineExpose({
   font-size: 28rpx;
   // color: #2b211b;
 }
+
 </style>

@@ -78,6 +78,9 @@ create index if not exists idx_completion_records_family_date
 create index if not exists idx_completion_records_user_date
   on public.chore_completion_records(user_id, completed_on desc);
 
+create index if not exists idx_completion_records_family_completed_at
+  on public.chore_completion_records(family_id, completed_at desc, id desc);
+
 alter table public.chore_catalog
   drop constraint if exists chore_catalog_frequency_code_check;
 
@@ -126,6 +129,95 @@ before update on public.household_items
 for each row
 execute function public.set_row_updated_at();
 
+create table if not exists public.pets (
+  id uuid primary key default gen_random_uuid(),
+  family_id uuid not null references public.families(id),
+  name text not null check (char_length(trim(name)) > 0),
+  is_active boolean not null default true,
+  created_by uuid references public.profiles(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint pets_id_family_unique unique (id, family_id)
+);
+
+create index if not exists idx_pets_family_active
+  on public.pets(family_id, is_active, created_at);
+
+drop trigger if exists trg_pets_updated_at on public.pets;
+create trigger trg_pets_updated_at
+before update on public.pets
+for each row
+execute function public.set_row_updated_at();
+
+create table if not exists public.pet_health_records (
+  id uuid primary key default gen_random_uuid(),
+  family_id uuid not null references public.families(id),
+  pet_id uuid not null,
+  metric_type text not null check (metric_type in ('weight', 'urine', 'stool')),
+  value numeric(8, 2) not null,
+  recorded_at timestamptz not null default now(),
+  created_by uuid references public.profiles(id),
+  created_at timestamptz not null default now(),
+  constraint pet_health_records_pet_family_fk
+    foreign key (pet_id, family_id) references public.pets(id, family_id) on delete restrict,
+  constraint pet_health_records_value_check check (
+    (metric_type = 'weight' and value > 0) or
+    (metric_type in ('urine', 'stool') and value between 0 and 99 and value = trunc(value))
+  )
+);
+
+alter table public.pet_health_records
+  drop constraint if exists pet_health_records_value_check;
+alter table public.pet_health_records
+  add constraint pet_health_records_value_check check (
+    (metric_type = 'weight' and value > 0) or
+    (metric_type in ('urine', 'stool') and value between 0 and 99 and value = trunc(value))
+  ) not valid;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from public.pet_health_records
+    where not (
+      (metric_type = 'weight' and value > 0) or
+      (metric_type in ('urine', 'stool') and value between 0 and 99 and value = trunc(value))
+    )
+  ) then
+    alter table public.pet_health_records
+      validate constraint pet_health_records_value_check;
+  end if;
+end;
+$$;
+
+create index if not exists idx_pet_health_records_family_pet_time
+  on public.pet_health_records(family_id, pet_id, recorded_at desc);
+
+create table if not exists public.temporary_events (
+  id uuid primary key default gen_random_uuid(),
+  family_id uuid not null references public.families(id),
+  title text not null check (char_length(trim(title)) > 0),
+  content text not null default '',
+  tag_color text not null,
+  is_completed boolean not null default false,
+  created_by uuid references public.profiles(id),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint temporary_events_family_color_unique unique (family_id, tag_color)
+);
+
+alter table public.temporary_events
+  add column if not exists is_completed boolean not null default false;
+
+create index if not exists idx_temporary_events_family_created
+  on public.temporary_events(family_id, created_at desc);
+
+drop trigger if exists trg_temporary_events_updated_at on public.temporary_events;
+create trigger trg_temporary_events_updated_at
+before update on public.temporary_events
+for each row
+execute function public.set_row_updated_at();
+
 create table if not exists public.source_import_runs (
   id bigint generated always as identity primary key,
   source_file_name text not null,
@@ -161,6 +253,85 @@ set search_path = public
 as $$
   select family_id from public.profiles where id = auth.uid();
 $$;
+
+create or replace function public.get_completion_record_stats(
+  p_family_id uuid,
+  p_start_date date default null,
+  p_end_date date default null
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is null or p_family_id is distinct from public.my_family_id() then
+    raise exception 'FORBIDDEN' using errcode = '42501';
+  end if;
+
+  return (
+    with filtered_records as materialized (
+      select user_id, category_name_snapshot, completed_on, completed_at
+      from public.chore_completion_records
+      where family_id = p_family_id
+        and (p_start_date is null or completed_on >= p_start_date)
+        and (p_end_date is null or completed_on <= p_end_date)
+    ),
+    member_stats as (
+      select
+        p.id as user_id,
+        p.display_name,
+        count(fr.user_id)::bigint as total_count,
+        max(fr.completed_at) as latest_completed_at,
+        coalesce(
+          (
+            select jsonb_object_agg(category_counts.category_name_snapshot, category_counts.total)
+            from (
+              select fr_category.category_name_snapshot, count(*)::bigint as total
+              from filtered_records fr_category
+              where fr_category.user_id = p.id
+              group by fr_category.category_name_snapshot
+            ) category_counts
+          ),
+          '{}'::jsonb
+        ) as category_counts
+      from public.profiles p
+      left join filtered_records fr on fr.user_id = p.id
+      where p.family_id = p_family_id
+      group by p.id, p.display_name, p.created_at
+    ),
+    daily_checkins as (
+      select user_id, completed_on, min(completed_at) as first_completed_at
+      from filtered_records
+      group by user_id, completed_on
+    )
+    select jsonb_build_object(
+      'members', coalesce(
+        (select jsonb_agg(jsonb_build_object(
+          'user_id', user_id,
+          'display_name', display_name,
+          'total_count', total_count,
+          'latest_completed_at', latest_completed_at,
+          'category_counts', category_counts
+        ) order by total_count desc, display_name asc) from member_stats),
+        '[]'::jsonb
+      ),
+      'daily_checkins', coalesce(
+        (select jsonb_agg(jsonb_build_object(
+          'user_id', user_id,
+          'completed_on', completed_on,
+          'first_completed_at', first_completed_at
+        ) order by completed_on desc, first_completed_at asc) from daily_checkins),
+        '[]'::jsonb
+      )
+    )
+  );
+end;
+$$;
+
+revoke all on function public.get_completion_record_stats(uuid, date, date) from public;
+grant execute on function public.get_completion_record_stats(uuid, date, date) to authenticated;
 
 create or replace function public.create_family_with_profile(p_family_name text, p_display_name text)
 returns table (family_id uuid, family_name text, join_code text)
@@ -315,6 +486,9 @@ alter table public.profiles enable row level security;
 alter table public.chore_catalog enable row level security;
 alter table public.chore_completion_records enable row level security;
 alter table public.household_items enable row level security;
+alter table public.pets enable row level security;
+alter table public.pet_health_records enable row level security;
+alter table public.temporary_events enable row level security;
 alter table public.source_import_runs enable row level security;
 
 drop policy if exists "families_select_same_family" on public.families;
@@ -410,6 +584,86 @@ for update
 to authenticated
 using (family_id = public.my_family_id())
 with check (family_id = public.my_family_id());
+
+drop policy if exists "pets_select_same_family" on public.pets;
+create policy "pets_select_same_family"
+on public.pets
+for select
+to authenticated
+using (family_id = public.my_family_id());
+
+drop policy if exists "pets_insert_same_family" on public.pets;
+create policy "pets_insert_same_family"
+on public.pets
+for insert
+to authenticated
+with check (family_id = public.my_family_id() and created_by = auth.uid());
+
+drop policy if exists "pets_update_same_family" on public.pets;
+create policy "pets_update_same_family"
+on public.pets
+for update
+to authenticated
+using (family_id = public.my_family_id())
+with check (family_id = public.my_family_id());
+
+drop policy if exists "pet_health_records_select_same_family" on public.pet_health_records;
+create policy "pet_health_records_select_same_family"
+on public.pet_health_records
+for select
+to authenticated
+using (family_id = public.my_family_id());
+
+drop policy if exists "pet_health_records_insert_same_family" on public.pet_health_records;
+create policy "pet_health_records_insert_same_family"
+on public.pet_health_records
+for insert
+to authenticated
+with check (family_id = public.my_family_id() and created_by = auth.uid());
+
+drop policy if exists "pet_health_records_update_same_family" on public.pet_health_records;
+create policy "pet_health_records_update_same_family"
+on public.pet_health_records
+for update
+to authenticated
+using (family_id = public.my_family_id())
+with check (family_id = public.my_family_id());
+
+drop policy if exists "pet_health_records_delete_same_family" on public.pet_health_records;
+create policy "pet_health_records_delete_same_family"
+on public.pet_health_records
+for delete
+to authenticated
+using (family_id = public.my_family_id());
+
+drop policy if exists "temporary_events_select_same_family" on public.temporary_events;
+create policy "temporary_events_select_same_family"
+on public.temporary_events
+for select
+to authenticated
+using (family_id = public.my_family_id());
+
+drop policy if exists "temporary_events_insert_same_family" on public.temporary_events;
+create policy "temporary_events_insert_same_family"
+on public.temporary_events
+for insert
+to authenticated
+with check (family_id = public.my_family_id() and created_by = auth.uid());
+
+drop policy if exists "temporary_events_update_same_family" on public.temporary_events;
+create policy "temporary_events_update_same_family"
+on public.temporary_events
+for update
+to authenticated
+using (family_id = public.my_family_id())
+with check (family_id = public.my_family_id());
+
+drop policy if exists "temporary_events_delete_same_family" on public.temporary_events;
+create policy "temporary_events_delete_same_family"
+on public.temporary_events
+for delete
+to authenticated
+using (family_id = public.my_family_id());
 
 revoke all on function public.create_family_with_profile(text, text) from public;
 revoke all on function public.join_family_with_profile(text, text) from public;

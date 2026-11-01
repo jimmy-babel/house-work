@@ -37,7 +37,8 @@
     "build:quickapp-webview": "uni build -p quickapp-webview",
     "build:quickapp-webview-huawei": "uni build -p quickapp-webview-huawei",
     "build:quickapp-webview-union": "uni build -p quickapp-webview-union",
-    "sync:source": "node scripts/import-source-xlsx.mjs"
+    "sync:source": "node scripts/import-source-xlsx.mjs",
+    "sync:source:wps": "node scripts/import-source-wps.mjs"
   },
   "dependencies": {
     "@dcloudio/uni-app": "3.0.0-5000620260331001",
@@ -57,6 +58,7 @@
     "@dcloudio/uni-mp-xhs": "3.0.0-5000620260331001",
     "@dcloudio/uni-quickapp-webview": "3.0.0-5000620260331001",
     "@supabase/supabase-js": "^2.103.0",
+    "ch-ucharts": "1.0.3",
     "dayjs": "^1.11.20",
     "dotenv": "^16.6.1",
     "uview-plus": "^3.7.30",

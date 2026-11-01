@@ -3,6 +3,8 @@
     label="Family Helper"
     :badge="isLoggedIn ? '已登录' : '邮箱登录'"
     :show-nav="false"
+    :show-card="!isLoggedIn"
+    v-slot="{ navigate }"
   >
     <view class="page">
       <StateBlock
@@ -28,23 +30,68 @@
       </StateBlock>
 
       <view v-else-if="isLoggedIn && hasProfile" class="stack">
-        <view class="summary-grid">
-          <view class="summary-card card summary-card--link" @tap="goToFamily">
-            <text class="summary-label">家庭名称</text>
-            <text class="summary-value">{{ familyName }}</text>
+        <view class="family-card" @tap="goToFamily">
+          <view class="family-card-heading">
+            <text class="family-card-eyebrow">MY FAMILY</text>
+            <view class="family-card-link">
+              <text>查看家庭详情</text>
+              <text class="family-card-arrow">›</text>
+            </view>
           </view>
-          <view class="summary-card card summary-card--link" @tap="goToFamily">
-            <text class="summary-label">家庭码</text>
-            <text class="summary-value">{{ joinCode }}</text>
+
+          <view class="flex-s-c">
+            <text class="family-card-name">{{ familyName }}</text>
+            <text class="family-code-value">【{{ joinCode }}】</text>
           </view>
-          <view class="summary-card card summary-card--link" @tap="goToDashboard('chores')">
-            <text class="summary-label">快捷入口</text>
-            <text class="summary-value">家务记录</text>
+
+          <!-- <view class="family-code-row">
+            <text class="family-code-label">家庭码</text>
+            <text class="family-code-value">{{ joinCode }}</text>
+          </view> -->
+        </view>
+
+        <view class="quick-section">
+          <text class="section-title">快捷入口</text>
+          <view class="summary-grid">
+            <view
+              v-for="entry in QUICK_ENTRY_ITEMS"
+              :key="entry.key"
+              class="summary-card card summary-card--link"
+              @tap="navigate(entry)"
+            >
+              <text class="summary-value">{{ entry.label }}</text>
+              <view class="summary-arrow" aria-hidden="true">
+                <view class="summary-arrow__tip" />
+              </view>
+            </view>
           </view>
-          <view class="summary-card card summary-card--link" @tap="goToItems">
-            <text class="summary-label">快捷入口</text>
-            <text class="summary-value">物品记录</text>
+        </view>
+
+        <view class="pending-section">
+          <view class="pending-heading" @tap="goToEvents">
+            <text class="section-title">留言板</text>
+            <view class="pending-heading-meta">
+              <text class="pending-count">{{ pendingEvents.length }}</text>
+              <!-- <text class="pending-heading-arrow">›</text> -->
+              <view class="summary-arrow" aria-hidden="true">
+                <view class="summary-arrow__tip" />
+              </view>
+            </view>
           </view>
+          <view v-if="pendingLoading" class="pending-empty">正在加载待处理事项…</view>
+          <view v-else-if="pendingEvents.length" class="pending-grid">
+            <TemporaryEventCard
+              v-for="(event, index) in pendingEvents"
+              :key="event.id"
+              :event="event"
+              :content="displayContent(event)"
+              :index="index"
+              :updating="updatingEventIds.has(event.id)"
+              @select="goToEvents"
+              @toggle-completed="togglePendingEvent"
+            />
+          </view>
+          <view v-else class="pending-empty">暂时没有待处理事项</view>
         </view>
 
         <view v-if="createdFamilyCode" class="card code-card">
@@ -182,10 +229,11 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import AppShell from '@/components/common/AppShell.vue'
 import StateBlock from '@/components/common/StateBlock.vue'
+import TemporaryEventCard from '@/components/events/TemporaryEventCard.vue'
 import {
   createFamilyForCurrentUser,
   joinFamilyForCurrentUser,
@@ -196,6 +244,8 @@ import {
 import { refreshProfile, useSession } from '@/composables/useSession'
 import { copyText, showError, showSuccess } from '@/utils/feedback'
 import { getRememberedCredentials, saveRememberedCredentials } from '@/utils/rememberedCredentials'
+import { QUICK_ENTRY_ITEMS } from '@/constants/housework'
+import { fetchTemporaryEvents, setTemporaryEventCompleted } from '@/services/temporaryEvents'
 
 const { state: sessionState, isLoggedIn, hasProfile } = useSession()
 // const { state: sessionState, hasProfile } = useSession()
@@ -205,6 +255,10 @@ const activePanel = ref('login')
 const registerMode = ref('create')
 const submitting = ref(false)
 const createdFamilyCode = ref('')
+const pendingEvents = ref([])
+const pendingLoading = ref(false)
+const pendingHasLoaded = ref(false)
+const updatingEventIds = ref(new Set())
 
 const loginForm = reactive({
   email: '',
@@ -256,7 +310,17 @@ onShow(() => {
     activePanel.value = 'login'
     applyRememberedCredentials()
   }
+  if (isLoggedIn.value && hasProfile.value) {
+    loadPendingEvents()
+  }
 })
+
+watch(
+  () => sessionState.profile?.family_id,
+  (familyId) => {
+    if (familyId) loadPendingEvents()
+  }
+)
 
 applyRememberedCredentials()
 
@@ -264,12 +328,52 @@ function goTo(url) {
   uni.navigateTo({ url })
 }
 
-function goToDashboard(tab = 'chores') {
-  goTo(`/pages/dashboard/index?tab=${tab}`)
+function goToEvents() {
+  goTo('/pages/events/index')
 }
 
-function goToItems() {
-  goTo('/pages/items/index')
+async function loadPendingEvents() {
+  const familyId = sessionState.profile?.family_id
+  if (!familyId) return
+  if (!pendingHasLoaded.value) pendingLoading.value = true
+  try {
+    const events = await fetchTemporaryEvents({ familyId })
+    pendingEvents.value = events.filter((event) => !event.is_completed)
+  } catch (error) {
+    showError(error, '加载待处理事项失败')
+  } finally {
+    pendingHasLoaded.value = true
+    pendingLoading.value = false
+  }
+}
+
+async function togglePendingEvent(event) {
+  if (updatingEventIds.value.has(event.id)) return
+  updatingEventIds.value = new Set(updatingEventIds.value).add(event.id)
+  try {
+    await setTemporaryEventCompleted({
+      eventId: event.id,
+      familyId: sessionState.profile.family_id,
+      isCompleted: true,
+    })
+    pendingEvents.value = pendingEvents.value.filter((item) => item.id !== event.id)
+    showSuccess('已标记完成')
+  } catch (error) {
+    showError(error, '更新状态失败')
+  } finally {
+    const next = new Set(updatingEventIds.value)
+    next.delete(event.id)
+    updatingEventIds.value = next
+  }
+}
+
+function displayContent(event) {
+  const content = (event.content || '').trim()
+  return content
+}
+
+function goToDashboard(tab = 'chores') {
+  goTo(`/pages/dashboard/index?tab=${tab}`)
 }
 
 function goToFamily() {
@@ -459,6 +563,7 @@ async function handleRegister() {
   text-align: center;
   color: #7a6454;
   background: transparent;
+  cursor: pointer;
 }
 
 .switch-item--active,
@@ -500,23 +605,195 @@ async function handleRegister() {
 }
 
 .summary-card {
-  flex: 1;
-  min-width: 220rpx;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 calc((100% - 24rpx) / 2);
+  min-width: 0;
+  min-height: 172rpx;
+  // justify-content: center;
 }
 
 .summary-card--link {
   cursor: pointer;
 }
 
-.summary-label {
+.family-card {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+  padding: 30rpx 40rpx;
+  border: 2rpx solid rgba(201, 106, 61, 0.2);
+  border-radius: 30rpx;
+  background:
+    radial-gradient(circle at 100% 0, rgba(201, 106, 61, 0.16), transparent 34%),
+    linear-gradient(135deg, #fffaf2 0%, #f5e8d9 100%);
+  box-shadow: 0 18rpx 44rpx rgba(84, 54, 37, 0.1);
+  cursor: pointer;
+}
+
+.family-card-heading,
+.family-code-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+  min-width: 0;
+}
+
+.family-card-eyebrow {
+  font-size: 20rpx;
+  letter-spacing: 0.24em;
+  color: #946c51;
+}
+
+.family-card-link {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  flex: none;
+  color: #a35b38;
+  font-size: 22rpx;
+}
+
+.family-card-arrow {
+  font-size: 34rpx;
+  line-height: 0.8;
+}
+
+.family-card-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 44rpx;
+  line-height: 1.3;
+  font-weight: 700;
+  color: #302219;
+}
+
+.family-code-row {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  padding-top: 20rpx;
+  border-top: 2rpx solid rgba(139, 99, 72, 0.16);
+}
+
+.family-code-label {
+  flex: none;
   font-size: 24rpx;
-  color: #8f7564;
+  color: #806651;
+}
+
+.family-code-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 30rpx;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #b65f39;
+  margin-left: 30rpx;
+}
+
+.quick-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  margin-top: 30rpx;
+}
+
+.pending-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  margin-top: 30rpx;
+}
+
+.pending-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 4rpx;
+  cursor: pointer;
+}
+
+.pending-heading-meta {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  color: #a47c5e;
+}
+
+.pending-count {
+  display: inline-flex;
+  min-width: 34rpx;
+  height: 34rpx;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8rpx;
+  border-radius: 999rpx;
+  background: rgba(201, 106, 61, 0.1);
+  font-size: 19rpx;
+}
+
+.pending-heading-arrow {
+  font-size: 36rpx;
+  line-height: 0.8;
+}
+
+.pending-grid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 22rpx 16rpx;
+  padding: 5rpx 2rpx 10rpx;
+}
+
+.pending-empty {
+  padding: 28rpx 20rpx;
+  border: 1rpx dashed rgba(166, 142, 119, 0.25);
+  border-radius: 20rpx;
+  color: #a08d7b;
+  text-align: center;
+  font-size: 21rpx;
+}
+
+.section-title {
+  font-size: 27rpx;
+  font-weight: 700;
+  color: #574234;
+  padding-left: 4rpx;
 }
 
 .summary-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 38rpx;
   font-weight: 700;
   color: #33251d;
+}
+
+.summary-arrow {
+  flex: none;
+  width: 42rpx;
+  height: 42rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 12rpx;
+  border-radius: 50%;
+  background: rgba(201, 106, 61, 0.1);
+}
+
+.summary-arrow__tip {
+  width: 11rpx;
+  height: 11rpx;
+  border-top: 3rpx solid #a77a5d;
+  border-right: 3rpx solid #a77a5d;
+  transform: translateX(-3rpx) rotate(45deg);
 }
 
 .code-row {
@@ -540,12 +817,17 @@ async function handleRegister() {
   background: #2f241d;
   color: #fff8f2;
   font-size: 24rpx;
+  cursor: pointer;
 }
 
 @media screen and (min-width: 900px) {
   .summary-grid {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .summary-card {
+    width: auto;
   }
 }
 </style>

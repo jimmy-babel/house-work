@@ -378,6 +378,7 @@ defineExpose({
   justify-content: center;
   padding: 32rpx;
   background: rgba(0, 0, 0, 0.58);
+  cursor: pointer;
 }
 
 .create-modal {
@@ -390,6 +391,7 @@ defineExpose({
   border-radius: 28rpx;
   background: #fffaf4;
   box-shadow: 0 30rpx 70rpx rgba(0, 0, 0, 0.18);
+  cursor: auto;
 }
 
 .create-modal__title {
@@ -419,4 +421,5 @@ defineExpose({
     padding: 18rpx;
   }
 }
+
 </style>

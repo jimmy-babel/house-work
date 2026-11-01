@@ -1,4 +1,4 @@
-export const CATEGORY_ORDER = ['厨房', '厕所', '客厅', '卧室', '洗衣机房', '雪福', '其他', '自定义']
+export const CATEGORY_ORDER = ['厨房', '客厅', '厕所', '卧室', '洗衣机房', '雪福', '其他', '自定义']
 
 export const CATEGORY_COLORS = {
   厨房: '#C96A3D',
@@ -33,12 +33,25 @@ export const FREQUENCY_WINDOWS = {
 }
 
 export const RANGE_OPTIONS = [
-  { key: 'week', label: '本周' },
   // { key: 'month', label: '本月' },
+  // { key: 'week', label: '本周' },
   { key: 'all', label: '全部' },
 ]
 
 export const APP_NAV_ITEMS = [
-  { key: 'chores', label: '记录家务', url: '/pages/dashboard/index?tab=chores' },
-  { key: 'comparison', label: '完成记录', url: '/pages/dashboard/index?tab=comparison' },
+  { key: 'chores', label: '家务列表', url: '/pages/dashboard/index?tab=chores' },
+  { key: 'comparison', label: '历史记录', url: '/pages/dashboard/index?tab=comparison' },
+]
+
+export const QUICK_ENTRY_ITEMS = [
+  {
+    key: 'chores',
+    label: '家务',
+    target: 'tab',
+    tabKey: 'chores',
+    url: '/pages/dashboard/index?tab=chores',
+  },
+  { key: 'pets', label: '宠物', target: 'page', url: '/pages/pets/index' },
+  { key: 'items', label: '物品', target: 'page', url: '/pages/items/index' },
+  { key: 'events', label: '留言板', target: 'page', url: '/pages/events/index' },
 ]

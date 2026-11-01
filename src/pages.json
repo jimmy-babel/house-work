@@ -4,7 +4,8 @@
     "custom": {
       "^u--(.*)": "uview-plus/components/u-$1/u-$1.vue",
       "^up-(.*)": "uview-plus/components/u-$1/u-$1.vue",
-      "^u-([^-].*)": "uview-plus/components/u-$1/u-$1.vue"
+      "^u-([^-].*)": "uview-plus/components/u-$1/u-$1.vue",
+      "^qiun-(.*)": "ch-ucharts/components/qiun-$1/qiun-$1.vue"
     }
   },
   "pages": [
@@ -27,6 +28,18 @@
       }
     },
     {
+      "path": "pages/pets/index",
+      "style": {
+        "navigationBarTitleText": "宠物助手"
+      }
+    },
+    {
+      "path": "pages/events/index",
+      "style": {
+        "navigationBarTitleText": "留言板"
+      }
+    },
+    {
       "path": "pages/family/index",
       "style": {
         "navigationBarTitleText": "我的家庭"
@@ -34,9 +47,10 @@
     }
   ],
   "globalStyle": {
+    "navigationStyle": "custom",
     "navigationBarTextStyle": "black",
     "navigationBarTitleText": "",
-    "navigationBarBackgroundColor": "#FFF7EF",
-    "backgroundColor": "#FFF7EF"
+    "navigationBarBackgroundColor": "#f8f3eb",
+    "backgroundColor": "#f8f3eb"
   }
 }
